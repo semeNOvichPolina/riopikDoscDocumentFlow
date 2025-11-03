@@ -109,7 +109,181 @@ C4 – это методология для моделирования архи�
 
 ### Безопасность
 
-Описать подходы, использованные для обеспечения безопасности, включая описание процессов аутентификации и авторизации с примерами кода из репозитория сервера
+Для обеспечения безопасности в программном средстве и контроля прав доступа пользователей используются JPA токены. В моем программном средстве будет предусмотрено 2 вида токенов: 
+– «access token» – проверяется при каждом обращении к API;
+– «refresh token» — токен для получения новой пары токенов.
+
+Entity для хранения токенов (аналог твоего Token в SQLAlchemy) представлен ниже:
+
+import jakarta.persistence.*;
+import java.time.Instant;
+
+@Entity
+@Table(name = "user_tokens")
+public class Token {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long idToken;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_profile", nullable = false, foreignKey = @ForeignKey(name = "fk_token_profile"))
+    private Profile profile;
+
+    @Column(length = 512, unique = true, nullable = false)
+    private String accessToken;
+
+    @Column(length = 512, unique = true, nullable = false)
+    private String refreshToken;
+
+    private Instant expiresAt;
+
+    @Column(nullable = false, updatable = false,
+            columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    private Instant createdAt = Instant.now();
+
+    // getters/setters
+}    )
+
+JWT Utility для генерации и валидации токенов представлен ниже:
+
+import io.jsonwebtoken.*;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.stereotype.Component;
+
+import java.security.Key;
+import java.time.Instant;
+import java.util.Date;
+import java.util.Map;
+
+@Component
+public class JwtUtil {
+
+    private final String SECRET_KEY = "your-secret-key-your-secret-key"; // >= 256 bit
+    private final Key key = Keys.hmacShaKeyFor(SECRET_KEY.getBytes());
+
+    private final long ACCESS_EXPIRE_MS = 15 * 60 * 1000;   // 15 минут
+    private final long REFRESH_EXPIRE_MS = 7 * 24 * 60 * 60 * 1000; // 7 дней
+
+    public String generateAccessToken(Map<String, Object> claims, String subject) {
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(subject)
+                .setExpiration(new Date(System.currentTimeMillis() + ACCESS_EXPIRE_MS))
+                .signWith(key, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public String generateRefreshToken(Map<String, Object> claims, String subject) {
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(subject)
+                .setExpiration(new Date(System.currentTimeMillis() + REFRESH_EXPIRE_MS))
+                .signWith(key, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public Claims validateToken(String token) throws JwtException {
+        return Jwts.parserBuilder()
+                .setSigningKey(key)
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+    }
+}
+
+Фильтр для проверки access token при каждом запросе представлен ниже.
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+public class JwtAuthFilter extends OncePerRequestFilter {
+
+    private final JwtUtil jwtUtil;
+
+    public JwtAuthFilter(JwtUtil jwtUtil) {
+        this.jwtUtil = jwtUtil;
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain)
+            throws ServletException, IOException {
+
+        String token = request.getHeader("Authorization");
+        if (token != null && token.startsWith("Bearer ")) {
+            token = token.substring(7);
+            try {
+                jwtUtil.validateToken(token);
+                // здесь можно загрузить пользователя и положить в SecurityContext
+            } catch (Exception e) {
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid token");
+                return;
+            }
+        }
+        filterChain.doFilter(request, response);
+    }
+}
+
+Сервис для обновления токенов по refresh token представлен ниже.
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@Service
+public class TokenService {
+
+    private final JwtUtil jwtUtil;
+    private final TokenRepository tokenRepository;
+
+    public TokenService(JwtUtil jwtUtil, TokenRepository tokenRepository) {
+        this.jwtUtil = jwtUtil;
+        this.tokenRepository = tokenRepository;
+    }
+
+    @Transactional
+    public Map<String, String> createTokens(Long userId) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("sub", userId.toString());
+
+        String accessToken = jwtUtil.generateAccessToken(claims, userId.toString());
+        String refreshToken = jwtUtil.generateRefreshToken(claims, userId.toString());
+
+        Token token = new Token();
+        token.setAccessToken(accessToken);
+        token.setRefreshToken(refreshToken);
+        token.setExpiresAt(java.time.Instant.now().plusSeconds(15 * 60));
+        // set profile etc.
+
+        tokenRepository.save(token);
+
+        Map<String, String> result = new HashMap<>();
+        result.put("access_token", accessToken);
+        result.put("refresh_token", refreshToken);
+        result.put("token_type", "bearer");
+        return result;
+    }
+
+    public boolean verifyToken(String token) {
+        try {
+            jwtUtil.validateToken(token);
+            return tokenRepository.findByAccessToken(token).isPresent();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+}
+
 
 ### Оценка качества кода
 
@@ -188,6 +362,7 @@ C4 – это методология для моделирования архи�
 ## **Контакты**
 
 Автор: semenovicpolina0@gmail.com
+
 
 
 
