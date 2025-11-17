@@ -37,8 +37,9 @@
 6. [Установка и  запуск](#installation)
 	1. [Манифесты для сборки docker образов](#Манифесты_для_сборки_docker_образов)
 	2. [Манифесты для развертывания k8s кластера](#Манифесты_для_развертывания_k8s_кластера)
-7. [Лицензия](#Лицензия)
-8. [Контакты](#Контакты)
+7. [Развертыввние](#installation_prog)
+8. [Лицензия](#Лицензия)
+9. [Контакты](#Контакты)
 
 ---
 ## **Архитектура**
@@ -383,6 +384,304 @@ public class TokenService {
 
 ---
 
+## **Развертывание**
+
+Разрабатываемая ПС – система электронного документооборота (СЭД) ООО «ЛВО», обрабатывающая входящие документы, поступающие из внешней системы межведомственного электронного документооборота (СМДО).
+Архитектура построена по микросервисному подходу и включает два основных сервиса:
+•	SMDOGATE – интеграционный шлюз. Отвечает за обмен с внешней системой СМДО: получение документов и вложений, декодирование подписей, формирование и отправку уведомлений, хранение технических идентификаторов (smdodocumentId, notifyId и т.д.).
+•	INOUT – сервис входящих документов. Отвечает за создание карточек входящих, регистрацию, проверку подписей, работу с пользователями (делопроизводитель, сотрудники компании) и формирование уведомлений о получении, регистрации и отклонении документов.
+Оба микросервиса используют общие инфраструктурные компоненты:
+•	PostgreSQL – реляционная СУБД для хранения карточек документов, статусов, уведомлений.
+•	LSTORAGE (MinIO) – файловое хранилище для вложений и подписей (бакеты attachments/signatures).
+•	Внутренний REST API между inout и smdogate.
+•	Внешний REST API между smdogate и СМДО.
+Для воспроизводимого развертывания используются два уровня автоматизации:
+1.	Docker + docker-compose – для локальной разработки, тестирования и демонстрации.
+2.	Kubernetes – для промышленного развёртывания в кластере.
+Для автоматической сборки контейнеров и доставки образов в реестр используется GitHub Actions.
+3. Docker-развертывание
+3.1 Назначение Docker-файлов
+В каталоге /deploy/docker находятся два Dockerfile – по одному на каждый микросервис:
+•	Dockerfile.inout – описывает сборку и запуск сервиса входящих документов.
+•	Dockerfile.smdogate – описывает сборку и запуск шлюза к СМДО.
+Оба файла используют многоступенчатую сборку:
+1.	build-слой устанавливает зависимости и собирает приложение;
+2.	run-слой содержит только скомпилированный код и runtime, что уменьшает размер образа, ускоряет развёртывание и снижает объем передаваемых данных.
+Dockerfile.inout
+
+# build
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY inout/package*.json ./
+RUN npm ci --omit=dev=false
+COPY inout/ ./
+RUN npm run build
+
+# run
+FROM node:20-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+EXPOSE 8080
+HEALTHCHECK --interval=20s --timeout=3s --retries=3 CMD wget -qO- http://localhost:8080/health || exit 1
+CMD ["node","dist/main.js"]
+
+В build-слое происходит сборка проекта inout. В run-слой попадает только папка dist и node_modules. Добавлен HEALTHCHECK, позволяющий оркестратору отслеживать живучесть контейнера.
+Dockerfile.smdogate
+
+# build
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY smdogate/package*.json ./
+RUN npm ci --omit=dev=false
+COPY smdogate/ ./
+RUN npm run build
+
+# run
+FROM node:20-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+EXPOSE 8090
+HEALTHCHECK --interval=20s --timeout=3s --retries=3 CMD wget -qO- http://localhost:8090/health || exit 1
+CMD ["node","dist/main.js"]
+
+По структуре аналогичен предыдущему, но предназначен для микросервиса smdogate и слушает порт 8090.
+3.2 docker-compose: совместный запуск всех компонентов
+Файл /deploy/docker/docker-compose.yml описывает запуск всей инфраструктуры в одном окружении: Postgres, MinIO, smdogate и inout. Это основной сценарий локального развёртывания.
+docker-compose.yml
+
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    env_file: [.env]
+    environment:
+      POSTGRES_DB: ${PG_DB}
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+    ports: ["5432:5432"]
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:RELEASE.2025-01-05T00-00-00Z
+    command: server /data --console-address ":9001"
+    env_file: [.env]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    ports: ["9000:9000","9001:9001"]
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD","curl","-f","http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  smdogate:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.smdogate
+    env_file: [.env]
+    environment:
+      PORT: 8090
+      DATABASE_URL: postgres://$(PG_USER):$(PG_PASSWORD)@postgres:5432/$(PG_DB)
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_BUCKET_ATTACH: ${BUCKET_ATTACH}
+      STORAGE_BUCKET_SIG: ${BUCKET_SIG}
+      STORAGE_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      STORAGE_SECRET_KEY: ${MINIO_SECRET_KEY}
+      INOUT_INTERNAL_URL: http://inout:8080
+      SMDO_BASE_URL: ${SMDO_BASE_URL}
+      SMDO_TOKEN: ${SMDO_TOKEN}
+    depends_on: [postgres, minio]
+    ports: ["8090:8090"]
+
+  inout:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.inout
+    env_file: [.env]
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://$(PG_USER):$(PG_PASSWORD)@postgres:5432/$(PG_DB)
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_BUCKET_ATTACH: ${BUCKET_ATTACH}
+      STORAGE_BUCKET_SIG: ${BUCKET_SIG}
+      STORAGE_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      STORAGE_SECRET_KEY: ${MINIO_SECRET_KEY}
+      SMDOGATE_URL: http://smdogate:8090
+    depends_on: [postgres, minio, smdogate]
+    ports: ["8080:8080"]
+
+volumes:
+  pg_data:
+  minio_data:
+
+Здесь:
+•	сервис postgres обеспечивает единую БД;
+•	minio играет роль LSTORAGE (файлы и подписи);
+•	smdogate использует Postgres и MinIO для хранения метаданных и вложений, а также предоставляет внутренний API для inout;
+•	inout использует те же Postgres и MinIO и взаимодействует со smdogate по SMDOGATE_URL.
+
+3.3 Файл .env
+Файл .env.example содержит параметры окружения и используется как шаблон, чтобы не хранить реальные секреты в Git.
+.env.example
+
+PG_DB=sed
+PG_USER=seduser
+PG_PASSWORD=sedpass
+
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+BUCKET_ATTACH=attachments
+BUCKET_SIG=signatures
+
+SMDO_BASE_URL=https://smdo.example.by/api
+SMDO_TOKEN=changeme
+
+При развёртывании создаётся копия .env, в которой заполняются реальные значения.
+
+3.4 Шаги развертывания через docker-compose
+1.	Клонировать репозиторий и перейти в каталог deploy/docker.
+2.	Создать .env на основе .env.example.
+3.	Выполнить команду:
+docker compose up -d --build
+4.	При необходимости выполнить миграции БД для микросервисов:
+docker compose exec inout npm run migrate
+docker compose exec smdogate npm run migrate
+После этого:
+•	inout доступен по адресу http://localhost:8080;
+•	smdogate – http://localhost:8090;
+•	MinIO (LSTORAGE) – http://localhost:9001.
+4. Kubernetes-развертывание
+Для промышленной среды используется Kubernetes. В каталоге /deploy/k8s находятся манифесты, каждый из которых отвечает за отдельный аспект развёртывания.
+4.1 Namespace, ConfigMap и Secret
+namespace.yaml создаёт отдельное пространство имён для системы СЭД, что изолирует её ресурсы.
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sed-lvo
+configmap.yaml содержит не секретные настройки (имена БД, названия бакетов, URL внешних сервисов).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sed-config
+  namespace: sed-lvo
+data:
+  PG_DB: sed
+  PG_USER: seduser
+  BUCKET_ATTACH: attachments
+  BUCKET_SIG: signatures
+  SMDO_BASE_URL: https://smdo.example.by/api
+
+secret.example.yaml хранит пароли и токены. Он не должен попадать в репозиторий в готовом виде; разработчик создаёт свой secret.yaml на его основе.
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sed-secrets
+  namespace: sed-lvo
+type: Opaque
+stringData:
+  PG_PASSWORD: sedpass
+  MINIO_ACCESS_KEY: minioadmin
+  MINIO_SECRET_KEY: minioadmin
+  SMDO_TOKEN: changeme
+
+4.2 PostgreSQL и MinIO как инфраструктурные сервисы
+postgres.yaml разворачивает Postgres в виде StatefulSet с отдельным PVC для данных.
+minio.yaml разворачивает объектное хранилище LSTORAGE с доступом по сервису minio.
+Эти манифесты обеспечивают устойчивое хранение данных и объектов, к которым потом обращаются inout и smdogate.
+
+4.3 Развёртывание микросервисов INOUT и SMDOGATE
+inout.deployment.yaml описывает Deployment и Service для микросервиса входящих документов. Указывается образ из контейнерного реестра, переменные окружения (через ConfigMap и Secret), количество реплик, а также probes для контроля здоровья.
+Аналогичный файл smdogate.deployment.yaml описывает шлюз.
+Сервисы inout.service.yaml и smdogate.service.yaml создают DNS-имена в кластере, по которым микросервисы могут обращаться друг к другу (inout.sed-lvo.svc.cluster.local и smdogate.sed-lvo.svc.cluster.local).
+4.4 Ingress
+ingress.yaml при необходимости проксирует внешний HTTP-трафик к inout и smdogate. Это позволяет подключать браузер/клиент СЭД извне, а также, при необходимости, внешнее СМДО через HTTPS.
+4.5 Шаги развёртывания в Kubernetes
+1.	Создать namespace и инфраструктуру:
+kubectl apply -f deploy/k8s/namespace.yaml
+kubectl apply -f deploy/k8s/secret.yaml      # на основе example
+kubectl apply -f deploy/k8s/configmap.yaml
+kubectl apply -f deploy/k8s/postgres.yaml
+kubectl apply -f deploy/k8s/minio.yaml
+2.	Развернуть микросервисы:
+kubectl apply -f deploy/k8s/inout.deployment.yaml -f deploy/k8s/inout.service.yaml
+kubectl apply -f deploy/k8s/smdogate.deployment.yaml -f deploy/k8s/smdogate.service.yaml
+3.	При необходимости включить Ingress:
+kubectl apply -f deploy/k8s/ingress.yaml
+В результате в кластере появляется полная схема, соответствующая диаграмме развертывания: INOUT и SMDOGATE общаются с Postgres и MinIO, a SMDOGATE — дополнительно с внешней системой СМДО.
+5. CI/CD на базе GitHub Actions
+Для автоматизации сборки образов используется сценарий GitHub Actions ci-cd.yml в каталоге .github/workflows.
+Назначение workflow
+•	При каждом изменении кода микросервисов или скриптов развертывания выполняется сборка Docker-образов inout и smdogate.
+•	Образы публикуются в GitHub Container Registry (GHCR) с тегом latest.
+•	Kubernetes-манифесты могут ссылаться на эти образы и использовать их при обновлении.
+Листинг 5 – ci-cd.yml
+
+name: CI/CD
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ "inout/**", "smdogate/**", "deploy/**" ]
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push inout
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.inout
+          push: true
+          tags: ghcr.io/${{ github.repository }}/inout:latest
+
+      - name: Build & push smdogate
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.smdogate
+          push: true
+          tags: ghcr.io/${{ github.repository }}/smdogate:latest
+
+Workflow обеспечивает непрерывную поставку свежих образов в реестр, что упрощает обновление кластера и снижает риск «ручных» ошибок при сборке.
+6. Выводы
+В рамках практического занятия была рассмотрена задача развертывания программной системы электронного документооборота ООО «ЛВО», состоящей из двух микросервисов: inout и smdogate. На основе архитектурных диаграмм и описания взаимодействия с внешней системой СМДО разработаны и интегрированы:
+•	Dockerfile’ы для каждого микросервиса, реализующие многоступенчатую сборку и health-check’и;
+•	конфигурация docker-compose, позволяющая развернуть все необходимые компоненты (PostgreSQL, MinIO, INOUT, SMDOGATE) одной командой;
+•	набор Kubernetes-манифестов (Namespace, Secret, ConfigMap, StatefulSet, Deployment, Service, Ingress), обеспечивающих переносимое и масштабируемое развёртывание в кластере;
+•	сценарий CI/CD на GitHub Actions для автоматической сборки и публикации контейнерных образов.
+Использование контейнеризации и оркестраторов позволяет обеспечить воспроизводимость окружения, быстрое масштабирование и обновление микросервисов без простоя. Разделение конфигурации и секретов от кода повышает безопасность и гибкость настройки. В целом, предложенный подход соответствует современным практикам развертывания микросервисных систем и может быть использован как основа для дальнейшего развития СЭД и интеграции с другими информационными системами.
+
+---
+
 ## **Лицензия**
 
 Этот проект лицензирован по лицензии MIT - подробности представлены в файле [[License.md|LICENSE.md]]
@@ -392,6 +691,7 @@ public class TokenService {
 ## **Контакты**
 
 Автор: semenovicpolina0@gmail.com
+
 
 
 
