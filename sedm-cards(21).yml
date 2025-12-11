@@ -1,0 +1,2162 @@
+openapi: '3.0.3'
+info:
+  version: '1.85'
+  title: 'Регистрационно-контрольная карта'
+tags:
+  - name: cards
+    description: 'Регистрационно-контрольная карточка'
+  - name: group-operations
+    description: 'Групповые операции'
+  - name: my-documents
+    description: 'Раздел <Мои Документы>'
+  - name: send-types
+    description: 'Виды поступлений/отправлений'
+  - name: resolution-templates
+    description: 'Шаблоны резолюций'
+  - name: in-out-organizations
+    description: 'Справочник организаций входящих/исходящих документов'
+security:
+  - JWT: []
+paths:
+  /commands/{command}/cards:
+    parameters:
+      - in: path
+        name: command
+        required: true
+        description: 'Выполнить действие'
+        schema:
+          $ref: '#/components/schemas/Command'
+    post:
+      parameters:
+        - in: query
+          required: true
+          name: year
+          description: 'Год'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          required: true
+          name: documentTypeId
+          description: 'Идентификатор типа документа из справочника SEDM_DOCUMENT_TYPE (сервис dimension)'
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          required: false
+          name: reasonId
+          description: 'Идентификатор справочника оснований'
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          required: false
+          name: referenceId
+          description: 'Идентификатор ркк документа основания'
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          required: false
+          name: addAllActiveEmployeesAsReviewers
+          description: 'Добавить всех действующих сотрудников как лиц ознакомления'
+          schema:
+            type: boolean
+        - in: query
+          required: false
+          name: relatedId
+          description: 'Идентификатор связанного ркк'
+          schema:
+            type: array
+            uniqueItems: true
+            items:
+              type: integer
+              format: int64
+      summary: 'Добавить регистрационно-контрольную карточку'
+      operationId: addCard
+      tags:
+        - cards
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Card'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+  /cards:
+    get:
+      parameters:
+        - in: query
+          required: true
+          name: dateFrom
+          description: 'Дата начала периода регистрации документа'
+          schema:
+            type: string
+            format: date
+        - in: query
+          required: true
+          name: dateTo
+          description: 'Дата конца периода регистрации документа'
+          schema:
+            type: string
+            format: date
+        - in: query
+          required: true
+          name: reviewerId
+          description: 'Идентификатор сотрудника (employeeId)'
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          required: false
+          name: documentTypeId
+          description: 'Идентификатор типа документа'
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          description: 'Статусы РКК'
+          name: statuses
+          required: false
+          schema:
+            type: array
+            uniqueItems: true
+            items:
+              type: string
+        - in: query
+          description: 'Список кодов основания'
+          name: reasonCodes
+          required: false
+          schema:
+            type: array
+            uniqueItems: true
+            items:
+              type: string
+      summary: "Получение списка РКК соответствующего переданным параметрам"
+      operationId: getCards
+      tags:
+        - cards
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CardShort'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Internal server error
+  /cards/{cardId}:
+    parameters:
+      - in: path
+        required: true
+        name: cardId
+        description: 'Идентификатор регистрационно-контрольной карточки'
+        schema:
+          type: integer
+          format: int64
+    get:
+      summary: 'Получить регистрационно-контрольную карточку'
+      operationId: getCard
+      tags:
+        - cards
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      summary: 'Изменить регистрационно-контрольную карточку'
+      operationId: updateCard
+      tags:
+        - cards
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Card'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      summary: 'Удалить регистрационно-контрольную карточку'
+      operationId: deleteCard
+      tags:
+        - cards
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+
+  /cards/{cardId}/links:
+    parameters:
+      - in: path
+        required: true
+        name: cardId
+        description: 'Идентификатор регистрационно-контрольной карточки'
+        schema:
+          type: integer
+          format: int64
+    patch:
+      summary: 'Обновить связи РКК'
+      operationId: linkCards
+      tags:
+        - cards
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkCards'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CardLink'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+
+  /cards/{cardId}/actions:
+    parameters:
+      - in: path
+        required: true
+        name: cardId
+        description: 'Идентификатор регистрационно-контрольной карточки'
+        schema:
+          type: integer
+          format: int64
+    post:
+      summary: 'Выполнить действие над РКК'
+      operationId: performAction
+      tags:
+        - cards
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardActionCommand'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+  /cards/{cardId}/folders:
+    parameters:
+      - in: path
+        required: true
+        name: cardId
+        description: 'Идентификатор регистрационно-контрольной карточки'
+        schema:
+          type: integer
+          format: int64
+    patch:
+      summary: "Привязать регистрационно-контрольную карточку к делу"
+      operationId: setFolder
+      tags:
+        - cards
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Folder'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+  /cards/{cardId}/state:
+    parameters:
+      - in: path
+        required: true
+        name: cardId
+        description: 'Идентификатор регистрационно-контрольной карточки'
+        schema:
+          type: integer
+          format: int64
+    patch:
+      summary: 'Изменение состояния регистрационно-контрольной карточки'
+      operationId: setCardState
+      tags:
+        - cards
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardState'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+  /cards/{cardId}/approvals:
+    parameters:
+      - in: path
+        required: true
+        name: cardId
+        description: 'Идентификатор регистрационно-контрольной карточки'
+        schema:
+          type: integer
+          format: int64
+    patch:
+      summary: 'Выполнить согласование'
+      operationId: setApprovalState
+      tags:
+        - cards
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Approval'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+  /cards/{cardId}/reviews:
+    parameters:
+      - in: path
+        required: true
+        name: cardId
+        description: 'Идентификатор регистрационно-контрольной карточки'
+        schema:
+          type: integer
+          format: int64
+    patch:
+      summary: 'Установить признак ознакомлен'
+      operationId: setReviewState
+      tags:
+        - cards
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Review'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+  /cards/{cardId}/notifications:
+    parameters:
+      - in: path
+        required: true
+        name: cardId
+        description: 'Идентификатор регистрационно-контрольной карточки'
+        schema:
+          type: integer
+          format: int64
+    post:
+      summary: 'Разослать уведомления по карточке'
+      operationId: sendCardNotifications
+      tags:
+        - cards
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardNotification'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+  /cards/{cardId}/files/merge:
+    parameters:
+      - in: path
+        required: true
+        name: cardId
+        description: 'Идентификатор регистрационно-контрольной карточки'
+        schema:
+          type: integer
+          format: int64
+    get:
+      summary: 'Объеденить файлы РКК в один pdf'
+      operationId: mergeFiles
+      tags:
+        - cards
+      responses:
+        200:
+          description: Ok
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        400:
+          $ref: '#/components/responses/BadRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+  /cards/{journal}/search:
+    get:
+      parameters:
+        - in: path
+          name: journal
+          required: true
+          description: "order - Журналы регистрации, in - Журналы входящих, smdo_in - СМДО входящие, review - Документы на рассмотрении, finder - поиск, out - Журналы исходящих, smdo_out - СМДО исходящие"
+          schema:
+            type: string
+            enum: [ 'order', 'in', 'smdo_in', 'review', 'finder', 'out', 'smdo_out' ]
+        - in: query
+          name: pageNumber
+          required: true
+          description: "Номер страницы"
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+        - in: query
+          name: pageSize
+          required: true
+          description: "Количество РКК, возвращаемых на одной странице"
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+        - in: query
+          description: 'id пользователя (пользователь указан в подписантах / согласующих /  ознакомлении). employeeId в таблице EMPLOYEE dimension'
+          name: employeeId
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          description: 'Год создания'
+          name: year
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          description: 'id типа документа (id из справочника dimension)'
+          name: documentTypeId
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          description: 'дата начала периода регистрации документа (не раньше)'
+          name: dateFrom
+          required: false
+          schema:
+            type: string
+            format: date
+        - in: query
+          description: 'дата конца периода регистрации документа (не позже)'
+          name: dateTo
+          required: false
+          schema:
+            type: string
+            format: date
+        - in: query
+          description: 'номер регистрации РКК'
+          name: cardNumber
+          required: false
+          schema:
+            type: string
+        - in: query
+          description: 'заголовок'
+          name: title
+          required: false
+          schema:
+            type: string
+        - in: query
+          description: 'id подразделения (id из справочника dimension)'
+          name: divisionId
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          description: 'id автора (id из справочника dimension)'
+          name: authorId
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          description: 'id подписанта (id из справочника dimension)'
+          name: signerId
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          description: 'статусы РКК'
+          name: statuses
+          required: false
+          schema:
+            type: array
+            uniqueItems: true
+            items:
+              type: string
+        - in: query
+          description: 'Список кодов основания'
+          name: reasonCodes
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          description: 'Дата регистрации документа организацией-корреспондентом c'
+          name: extDateFrom
+          required: false
+          schema:
+            type: string
+            format: date
+        - in: query
+          description: 'Дата регистрации документа организацией-корреспондентом по'
+          name: extDateTo
+          required: false
+          schema:
+            type: string
+            format: date
+        - in: query
+          description: 'Рег. номер документа организации-корреспондента'
+          name: extNumber
+          required: false
+          schema:
+            type: string
+        - in: query
+          description: 'id организации-корреспондента'
+          name: correspondentOrgId
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          description: 'id автора резолюции (id из справочника dimension)'
+          name: resolutionAuthorId
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          description: 'id исполнителя (id из справочника diminsion)'
+          name: implementerId
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          description: 'Список видов отправки/получения (SMDO, EMAIL, ...)'
+          name: sendType
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          description: 'Дата поступления c'
+          name: dateEnterFrom
+          required: false
+          schema:
+            type: string
+            format: date
+        - in: query
+          description: 'Дата поступления по'
+          name: dateEnterTo
+          required: false
+          schema:
+            type: string
+            format: date
+      summary: "Получение списка РКК соответствующего переданным параметрам"
+      operationId: getCardsByFilter
+      tags:
+        - cards
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Internal server error
+  /cards/count:
+    get:
+      parameters:
+        - in: query
+          description: 'Год создания'
+          name: year
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          description: 'id типа документа (id из справочника diminsion)'
+          name: documentTypeId
+          required: true
+          schema:
+            type: integer
+            format: int64
+      summary: 'Подсчет количества РКК в статусе PREPARATION_ERROR (в будущем можно будет изменить и для других статусов)'
+      operationId: cardsCount
+      tags:
+        - cards
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardsCount'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Internal server error
+  /cards/move:
+    post:
+      summary: "Перенести РКК в актуальный журнал"
+      operationId: moveCards
+      tags:
+        - group-operations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardsMove'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+
+  /cards/preparation:
+    post:
+      summary: 'Перенос РКК в систему подготовки '
+      operationId: moveCardsToPreparation
+      tags:
+        - group-operations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardsMove'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+
+  /cards/remove:
+    post:
+      summary: 'Удаление РКК'
+      operationId: removeCards
+      tags:
+        - group-operations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardsMove'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+
+  /myDocuments:
+    get:
+      parameters:
+        - in: query
+          name: pageNumber
+          required: true
+          description: "Номер страницы"
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+        - in: query
+          name: pageSize
+          required: true
+          description: "Количество РКК, возвращаемых на одной странице"
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+        - in: query
+          description: 'Дата начала периода регистрации документа (не раньше)'
+          name: dateFrom
+          required: false
+          schema:
+            type: string
+            format: date
+        - in: query
+          description: 'Дата конца периода регистрации документа (не позже)'
+          name: dateTo
+          required: false
+          schema:
+            type: string
+            format: date
+        - in: query
+          description: 'id типа документа (id из справочника diminsion)'
+          name: documentTypeId
+          required: false
+          schema:
+            type: array
+            uniqueItems: true
+            items:
+              type: integer
+              format: int64
+        - in: query
+          description: 'Статусы РКК'
+          name: statuses
+          required: false
+          schema:
+            type: array
+            uniqueItems: true
+            items:
+              type: string
+        - in: query
+          description: 'Заголовок'
+          name: title
+          required: false
+          schema:
+            type: string
+        - in: query
+          description: 'id организации-корреспондента'
+          name: correspondentOrgId
+          required: false
+          schema:
+            type: integer
+            format: int64
+      summary: "Получение списка РКК, где участвовал пользователь"
+      operationId: getMyCards
+      tags:
+        - my-documents
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Internal server error
+
+  /cards/send-types:
+    get:
+      summary: "Получение списка видов отправки/получения документов"
+      operationId: getSendTypes
+      tags:
+        - send-types
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SendType'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Internal server error
+    post:
+      summary: "Добавление вида отправки/получения документа"
+      operationId: addSendType
+      tags:
+        - send-types
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendType'
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendType'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Internal server error
+    put:
+      summary: "Изменение вида отправки/получения документа"
+      operationId: editSendType
+      tags:
+        - send-types
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendType'
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendType'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Internal server error
+
+  /cards/send-types/{code}:
+    parameters:
+      - in: path
+        required: true
+        name: code
+        description: 'Код вида отправки/получения'
+        schema:
+          type: string
+    delete:
+      summary: "Удаление вида отправки/получения документа"
+      operationId: deleteSendType
+      tags:
+        - send-types
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendType'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Internal server error
+
+  /cards/resolution-templates:
+    get:
+      summary: "Получение списка шаблонов резолюций"
+      operationId: getResolutionTemplate
+      tags:
+        - resolution-templates
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResolutionTemplate'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Internal server error
+    post:
+      summary: "Добавление шаблона резолюции"
+      operationId: addResolutionTemplate
+      tags:
+        - resolution-templates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolutionTemplate'
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolutionTemplate'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Internal server error
+
+  /cards/resolution-templates/{id}:
+    parameters:
+      - in: path
+        required: true
+        name: id
+        description: 'ИД шаблона резолюции'
+        schema:
+          type: integer
+          format: 'int64'
+    put:
+      summary: "Изменение шаблона резолюции"
+      operationId: editResolutionTemplate
+      tags:
+        - resolution-templates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolutionTemplate'
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolutionTemplate'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Internal server error
+    delete:
+      summary: "Удаление шаблона резолюции"
+      operationId: deleteResolutionTemplate
+      tags:
+        - resolution-templates
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolutionTemplate'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Internal server error
+
+  /cards/organizations:
+    get:
+      parameters:
+        - in: query
+          name: pageNumber
+          description: "Номер страницы"
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - in: query
+          name: pageSize
+          description: "Количество организаций, возвращаемых на одной странице"
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            default: 25
+        - in: query
+          name: name
+          description: "Наименование организации"
+          schema:
+            type: string
+            maxLength: 512
+        - in: query
+          name: unp
+          description: "УНП организации"
+          schema:
+            type: string
+            maxLength: 12
+        - in: query
+          name: isSmdo
+          description: "Организация является клиентом СМДО"
+          schema:
+            type: boolean
+        - in: query
+          name: smdoActive
+          description: "Активность в СМДО"
+          schema:
+            type: boolean
+      summary: "Получение списка организаций для входящих/исходящих документов"
+      operationId: getInOutOrganizations
+      tags:
+        - in-out-organizations
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageOrg'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Internal server error
+    post:
+      summary: "Добавление организации для входящих/исходящих документов"
+      operationId: addInOutOrganization
+      tags:
+        - in-out-organizations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InOutOrganization'
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InOutOrganization'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Internal server error
+
+  /cards/organizations/{id}:
+    parameters:
+      - in: path
+        required: true
+        name: id
+        description: 'ИД организации'
+        schema:
+          type: integer
+          format: 'int64'
+    put:
+      summary: "Изменение организации для входящих/исходящих документов"
+      operationId: editInOutOrganization
+      tags:
+        - in-out-organizations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InOutOrganization'
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InOutOrganization'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Internal server error
+    delete:
+      summary: "Удаление организации для входящих/исходящих документов"
+      operationId: deleteInOutOrganization
+      tags:
+        - in-out-organizations
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InOutOrganization'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Internal server error
+
+  /cards/statuses:
+    get:
+      summary: "Получить список статусов РКК"
+      operationId: getCardsStatuses
+      tags:
+        - cards
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                description: "Возвращается объект с полями ключ-значение, где ключ - код статуса, значение - наименование статуса"
+                type: object
+        400:
+          $ref: '#/components/responses/BadRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+
+
+
+components:
+  securitySchemes:
+    JWT:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorMessage'
+    InternalServerError:
+      description: Internal server error
+  schemas:
+    ErrorMessage:
+      type: object
+      description: 'Структура для отправки сообщения об ошибке. userMessage содержит сообщение для пользователя.'
+      properties:
+        code:
+          type: string
+          description: 'Внутренний код ошибки'
+        internalCode:
+          type: string
+          description: 'Внутренний код ошибки'
+        devMessage:
+          type: string
+          description: 'Сообщение для разработчика'
+        userMessage:
+          $ref: '#/components/schemas/TextData'
+      required:
+        - code
+        - devMessage
+        - userMessage
+
+    TextData:
+      type: object
+      description: 'Объект с динамическим количеством атрибутов для представления мультиязычной информации. Наименования атрибутов имеют вид lang_{код языка по ISO 639-1}. Примеры lang_ru, lang_by, lang_en.'
+      properties:
+        lang_en:
+          type: string
+          description: 'Текст на английском'
+        lang_ru:
+          type: string
+          description: 'Текст на русском'
+
+    SuccessMessage:
+      description: 'Сообщение об успешном выполнении операции'
+      type: object
+      properties:
+        message:
+          type: string
+          example: 'OK'
+
+    Command:
+      description: 'Действие с приказом: CREATE - создать приказ, RESERVE - зарезервировать, SAVE - сохранить как черновик;
+      Действие c входящими: SAVE - сохранить как черновик, CONSIDER - передать на рассмотрение, IMPLEMENT - передать на исполнение, REVIEW - передать для ознакомления, REGISTER - зарегистрировать, APPROVE - утвердить'
+      type: string
+      enum: ['CREATE', 'RESERVE', 'SAVE', 'CONSIDER', 'IMPLEMENT', 'REVIEW', 'REGISTER', 'APPROVE']
+
+    Employee:
+      description: 'Сотрудник'
+      type: object
+      properties:
+        employeeId:
+          description: 'Идентификатор'
+          type: integer
+          format: int64
+        name:
+          description: 'ФИО'
+          type: string
+          readOnly: true
+
+    Organization:
+      description: 'Организация'
+      type: object
+      properties:
+        organizationId:
+          description: 'Идентификатор'
+          type: integer
+          format: int64
+        name:
+          description: 'Наименование'
+          type: string
+          readOnly: true
+
+    Division:
+      description: 'Подразделение'
+      type: object
+      properties:
+        divisionId:
+          description: 'Идентификатор'
+          type: integer
+          format: int64
+        name:
+          description: 'Наименование'
+          type: string
+          readOnly: true
+
+    Position:
+      description: 'Должность'
+      type: object
+      properties:
+        positionId:
+          description: 'Идентификатор'
+          type: integer
+          format: int64
+        name:
+          description: 'Наименование'
+          type: string
+          readOnly: true
+
+    ApprovalType:
+      description: 'Тип согласования: PARALLEL - параллельное, SEQUANTIAL - поэтапное'
+      type: string
+      enum: ['PARALLEL', 'SEQUENTIAL']
+
+    ApprovalState:
+      description: "Состояние согласования: APPROVED - согласован, DISAPPROVED - не согласован"
+      type: string
+      enum: ['APPROVED', 'DISAPPROVED']
+
+    Direction:
+      description: "Направление документа: IN - входящий, OUT - исходящий"
+      type: string
+      enum: ['IN', 'OUT']
+      maxLength: 3
+
+    ApprovalPerson:
+      description: 'Согласующие лицо'
+      allOf:
+        - $ref: '#/components/schemas/Employee'
+        - type: object
+          properties:
+            order:
+              description: 'Порядок согласования'
+              type: integer
+            state:
+              readOnly: true
+              allOf:
+                - $ref: '#/components/schemas/ApprovalState'
+            comment:
+              description: 'Комментарий'
+              type: string
+              maxLength: 500
+              readOnly: true
+
+    Approval:
+      description: 'Согласование'
+      type: object
+      properties:
+        state:
+          $ref: '#/components/schemas/ApprovalState'
+        comment:
+          description: 'Комментарий'
+          type: string
+          maxLength: 500
+      required:
+        - state
+    
+    ReviewState:
+      description: "Состояние ознакомления: REVIEWED - ознакомлен"
+      type: string
+      enum: ['REVIEWED']
+
+    ReviewPerson:
+      description: 'Лицо для ознакомления'
+      allOf:
+        - $ref: '#/components/schemas/Employee'
+        - type: object
+          properties:
+            state:
+              readOnly: true
+              allOf:
+                - $ref: '#/components/schemas/ReviewState'
+            vacations:
+              description: 'Список периодов отпусков'
+              type: array
+              uniqueItems: true
+              items:
+                $ref: '#/components/schemas/Period'
+            vacationIntervals:
+              description: 'Список отпусков в разбивке по рабочим годам'
+              type: array
+              uniqueItems: true
+              items:
+                $ref: '#/components/schemas/VacationTimeInterval'
+            comment:
+              description: 'Комментарий'
+              type: string
+
+    Review:
+      description: 'Ознакомление'
+      type: object
+      properties:
+        state:
+          $ref: '#/components/schemas/ReviewState'
+        comment:
+          description: 'Комментарий'
+          type: string
+          maxLength: 256
+      required:
+        - state
+
+    CardStatus:
+      description: 'Статус регистрационно-контрольной карточки'
+      type: string
+      enum: ['PROJECT', 'DRAFT', 'CREATED', 'APPROVAL', 'APPROVED', 'SIGNING', 'SIGNED', 'REGISTERED', 'REVIEW',
+             'REVIEWED', 'PREPARATION_PROCESSING', 'PREPARATION_LOADED', 'PREPARATION_ERROR', 'RECEIVED', 'RECEIVED_MSG',
+             'REJECTED', 'CONSIDER', 'IMPLEMENT', 'IMPLEMENTED', 'SENT', 'SMDO_SEND', 'SMDO_RECEIVED', 'SMDO_RECEIVED_MSG',
+             'SMDO_REJECTED', 'SMDO_REGISTERED', 'SMDO_ERROR', 'CANCELED', 'DELETED', 'SEND_WAITING'
+      ]
+
+    CardState:
+      description: 'Состояние регистрационно-контрольной карточки'
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/CardStatus'
+        comment:
+          description: 'Комментарий'
+          type: string
+          maxLength: 500
+      required:
+        - status
+
+    Card:
+      description: 'Регистрационно-контрольная карточка'
+      type: object
+      properties:
+        cardId:
+          description: 'Идентификатор'
+          type: integer
+          format: int64
+          readOnly: true
+        referenceId:
+          description: 'Идентификатор связанного ркк'
+          type: integer
+          format: int64
+          readOnly: true
+        status:
+          allOf:
+            - $ref: '#/components/schemas/CardStatus'
+          readOnly: true
+        statusComment:
+          description: 'Комментарий к статусу'
+          type: string
+          maxLength: 500
+          readOnly: true
+        folderId:
+          description: 'Идентификатор'
+          type: integer
+          format: int64
+          readOnly: true
+        reasonId:
+          description: 'Идентификатор справочника оснований'
+          type: integer
+          format: int64
+          readOnly: true
+        reasonCode:
+          description: 'Код справочника оснований'
+          type: string
+          readOnly: true
+        date:
+          description: 'Дата документа'
+          type: string
+          format: date
+        dateFrom:
+          description: 'Дата начала'
+          type: string
+          format: date
+        dateTo:
+          description: 'Дата окончания'
+          type: string
+          format: date
+        number:
+          description: 'Регистрационный номер'
+          type: string
+          maxLength: 15
+        index:
+          description: 'Индекс дела'
+          type: string
+          maxLength: 30
+        folderFullIndex:
+          description: 'Полный индекс папки (дела)'
+          type: string
+          readOnly: true
+        author:
+          allOf:
+            - $ref: '#/components/schemas/Employee'
+          description: 'Инициатор'
+          readOnly: true
+        authorDivision:
+          allOf:
+            - $ref: '#/components/schemas/Division'
+          description: 'Подразделение инициатора'
+          readOnly: true
+        authorPosition:
+          allOf:
+            - $ref: '#/components/schemas/Position'
+          description: 'Должность инициатора'
+          readOnly: true
+        title:
+          description: 'Заголовок'
+          type: string
+          maxLength: 500
+        statement:
+          description: 'Констатирующая часть'
+          type: string
+        action:
+          description: "Префикс распорядительной части (значение из справочника SEDM_ACTIONS)"
+          type: string
+        actionStatement:
+          description: 'Распорядительная часть'
+          type: string
+        certificateDateEnd:
+          description: 'Дата окончания больничного'
+          type: string
+          format: date
+        recallDate:
+          description: 'Дата отзыва из отпуска'
+          type: string
+          format: date
+        signer:
+          description: 'Подписант'
+          allOf:
+            - $ref: '#/components/schemas/Employee'
+        approvalType:
+          $ref: '#/components/schemas/ApprovalType'
+        approvalDays:
+          description: 'Срок согласования (количество дней)'
+          type: integer
+          minimum: 1
+        approvalPersons:
+          description: 'Список согласующих лиц'
+          type: array
+          items:
+            $ref: '#/components/schemas/ApprovalPerson'
+          uniqueItems: true
+        file:
+          description: 'Документ, сформированный на основании заполненных данных'
+          readOnly: true
+          allOf:
+            - $ref: '#/components/schemas/FileInfo'
+        externalFile:
+          description: 'Документ, загруженный извне'
+          allOf:
+            - $ref: '#/components/schemas/FileInfo'
+        applicationFiles:
+          description: 'Документы приложений'
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/FileInfo'
+        documentFiles:
+          description: 'Связанные документы'
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/FileInfo'
+        reviewFile:
+          description: 'Лист ознакомления'
+          readOnly: true
+          allOf:
+            - $ref: '#/components/schemas/FileInfo'
+        approvalFile:
+          description: 'Лист согласования'
+          readOnly: true
+          allOf:
+            - $ref: '#/components/schemas/FileInfo'
+        reviewers:
+          description: 'Список лиц для ознакомления'
+          type: array
+          items:
+            $ref: '#/components/schemas/ReviewPerson'
+          uniqueItems: true
+        version:
+          description: 'Версия'
+          type: integer
+          format: int32
+          readOnly: true
+        reviewDays:
+          description: 'Количество дней на ознакомление'
+          type: integer
+          format: int32
+          minimum: 1
+        extDate:
+          description: 'Дата регистрации документа организацией-корреспондентом'
+          type: string
+          format: date
+        extNumber:
+          description: 'Регистрационный номер документа организации-корреспондента'
+          type: string
+          maxLength: 30
+        correspondentOrg:
+          description: 'Организация-корреспондент'
+          allOf:
+            - $ref: '#/components/schemas/Organization'
+        resolutionAuthor:
+          description: 'Автор резолюции'
+          allOf:
+            - $ref: '#/components/schemas/Employee'
+            - type: object
+              properties:
+                comment:
+                  description: 'Комментарий'
+                  type: string
+                  maxLength: 256
+        implementer:
+          description: 'Исполнитель'
+          allOf:
+            - $ref: '#/components/schemas/Employee'
+            - type: object
+              properties:
+                comment:
+                  description: 'Комментарий'
+                  type: string
+                  maxLength: 256
+        sendType:
+          description: 'Вид отправки/получения (SMDO, EMAIL, ...)'
+          type: string
+          maxLength: 10
+        direction:
+          $ref: '#/components/schemas/Direction'
+        answer:
+          description: 'Необходимость ответа'
+          type: boolean
+        control:
+          description: 'Контроль'
+          type: boolean
+        implDate:
+          description: 'Срок исполнения'
+          type: string
+          format: date
+        dateEnter:
+          description: 'Дата поступления'
+          type: string
+          format: date-time
+        linkedDoc:
+          description: 'Связанный документ'
+          readOnly: true
+          allOf:
+            - $ref: '#/components/schemas/LinkedDoc'
+        documentTypeId:
+          description: 'Идентификатор типа документа'
+          type: integer
+          format: int64
+          readOnly: true
+        relatedCards:
+          readOnly: true
+          description: 'массив связанных РКК'
+          type: array
+          items:
+            $ref: '#/components/schemas/CardLink'
+
+    LinkedDoc:
+      type: object
+      description: 'Связанный документ'
+      properties:
+        cardId:
+          description: 'Идентификатор'
+          type: integer
+          format: int64
+          readOnly: true
+        documentTypeId:
+          description: 'Тип документов в папке (id справочника в dimension)'
+          type: integer
+          format: int64
+        title:
+          description: 'Заголовок'
+          type: string
+          maxLength: 100
+        number:
+          description: 'Регистрационный номер'
+          type: string
+          maxLength: 15
+        date:
+          description: 'Дата документа'
+          type: string
+          format: date
+
+    FileInfo:
+      type: object
+      description: "Информация о файле"
+      properties:
+        fileId:
+          type: integer
+          format: int64
+          description: "Идентификатор файла"
+        uploadDate:
+          type: string
+          format: date-time
+          description: "Время добавления файла"
+          readOnly: true
+        fileName:
+          type: string
+          description: "Имя файла"
+          readOnly: true
+        fileDescription:
+          type: string
+          description: "Примечание к файлу"
+          readOnly: true
+        fileHash:
+          type: string
+          description: "Хэшкод, полученный от системы l-storage"
+          readOnly: true
+
+    CardShort:
+      description: "Упрощённый вид регистрационно-контрольной карточки"
+      type: object
+      properties:
+        cardId:
+          description: 'Идентификатор'
+          type: integer
+          format: int64
+          readOnly: true
+        year:
+          description: 'Год'
+          type: string
+        documentTypeId:
+          description: 'Тип документов в папке (id справочника в dimension)'
+          type: integer
+          format: int64
+        index:
+          description: 'Номер папки (дела)'
+          type: string
+        folderFullIndex:
+          description: 'Полный индекс папки (дела)'
+          type: string
+          readOnly: true
+        date:
+          description: 'Дата документа'
+          type: string
+          format: date
+        number:
+          description: 'Регистрационный номер'
+          type: string
+          maxLength: 15
+        title:
+          description: 'Заголовок'
+          type: string
+          maxLength: 100
+        divisionId:
+          description: 'Идентификатор подразделения в структуре (id из справочника diminsion)'
+          type: integer
+          format: int64
+        divisionName:
+          description: 'Наименование подразделения'
+          type: string
+        fileId:
+          type: integer
+          format: int64
+          description: "Идентификатор файла документа"
+        fileExternalId:
+          type: integer
+          format: int64
+          description: "Идентификатор файла загруженного извне"
+        author:
+          allOf:
+            - $ref: '#/components/schemas/Employee'
+          description: 'Инициатор'
+          readOnly: true
+        status:
+          allOf:
+            - $ref: '#/components/schemas/CardStatus'
+          readOnly: true
+        signer:
+          allOf:
+            - $ref: '#/components/schemas/Employee'
+          description: 'Подписант'
+        reasonId:
+          description: 'Идентификатор справочника оснований'
+          type: integer
+          format: int64
+        reasonCode:
+          description: 'Код справочника оснований'
+          type: string
+        version:
+          description: 'Версия'
+          type: integer
+          format: int32
+          readOnly: true
+        cardPreparationMessage:
+          description: 'Сообщение от системы подготовки'
+          type: string
+        extDate:
+          description: 'Дата регистрации документа организацией-корреспондентом'
+          type: string
+          format: date
+        extNumber:
+          description: 'Регистрационный номер документа организации-корреспондента'
+          type: string
+          maxLength: 30
+        correspondentOrg:
+          allOf:
+            - $ref: '#/components/schemas/Organization'
+          description: 'Организация-корреспондент'
+        resolutionAuthor:
+          description: 'Автор резолюции'
+          allOf:
+            - $ref: '#/components/schemas/Employee'
+            - type: object
+              properties:
+                comment:
+                  description: 'Комментарий'
+                  type: string
+                  maxLength: 256
+                  readOnly: true
+        implementer:
+          description: 'Исполнитель'
+          allOf:
+            - $ref: '#/components/schemas/Employee'
+            - type: object
+              properties:
+                comment:
+                  description: 'Комментарий'
+                  type: string
+                  maxLength: 256
+                  readOnly: true
+        sendType:
+          description: 'Вид отправки/получения (SMDO, EMAIL, ...)'
+          type: string
+          maxLength: 10
+        direction:
+          $ref: '#/components/schemas/Direction'
+        dateEnter:
+          description: 'Дата поступления'
+          type: string
+          format: date-time
+        statusMessages:
+          description: 'Сообщения об ошибках'
+          readOnly: true
+          type: array
+          items:
+            type: string
+
+
+    Page:
+      description: "Страница"
+      type: object
+      properties:
+        number:
+          description: "Номер страницы"
+          type: integer
+          format: int32
+        total:
+          description: "Количество страниц"
+          type: integer
+          format: int32
+        elementsTotal:
+          description: "Общее количество элементов на всех странцах"
+          type: integer
+          format: int64
+        
+        elements:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/CardShort'
+
+    Folder:
+      description: "Дело"
+      type: object
+      properties:
+        folderId:
+          description: "Идентификатор"
+          type: integer
+          format: int64
+      required:
+        - folderId
+    
+    CardsMove:
+      description: 'Запрос переноса РКК'
+      type: object
+      properties:
+        cardIds:
+          description: 'Список идентификаторов РКК для переноса'
+          type: array
+          uniqueItems: true
+          minItems: 1
+          items:
+            type: integer
+            format: int64
+
+    Period:
+      description: 'Период'
+      type: object
+      properties:
+        dateFrom:
+          description: 'Дата начала'
+          type: string
+          format: date
+        dateTo:
+          description: 'Дата окончания'
+          type: string
+          format: date
+      required:
+        - dateFrom
+        - dateTo
+    CardNotification:
+      description: 'Уведомление'
+      type: object
+      properties:
+        event:
+          $ref: '#/components/schemas/NotificationEvent'
+      required:
+        - event
+
+    NotificationEvent:
+      description: "Событие - основание для отправки уведомлений: VACATION - уведомления о запланированном отпуске подчиненных, VACATION_ORDER - уведомления о включении в приказ, REVIEW - уведомление о включении в список ознакомления, SIGNER - уведомление о назначении подписантом, CONSIDER - уведомление о рассмотрении, IMPLEMENT - уведомление об исполнении, REVIEW_OUT - уведомления для соисполнителей"
+      type: string
+      enum: [ 'VACATION', 'VACATION_ORDER', 'REVIEW', 'SIGNER', "CONSIDER", "IMPLEMENT", "REVIEW_OUT" ]
+
+    VacationTimeInterval:
+      description: 'Информация об отпуске'
+      type: object
+      properties:
+        mainVacationsDays:
+          description: 'Количество дней основного отпуска'
+          type: integer
+          format: int32
+        additionalVacationDays:
+          description: 'Количество дней дополнительного отпуска'
+          type: integer
+          format: int32
+        vacationDaysFrom:
+          description: 'Дата начала отпуска'
+          type: string
+          format: date
+        vacationDaysTo:
+          description: 'Дата окончания отпуска'
+          type: string
+          format: date
+        beginWorkPeriod:
+          description: 'Дата начала рабочего года'
+          type: string
+          format: date
+        endWorkPeriod:
+          description: 'Дата окончания рабочего года'
+          type: string
+          format: date
+        workPeriodExternalId:
+          description: 'Идентификатор внешней системы (код структуры рабочего года)'
+          type: string
+
+    CardsCount:
+      description: 'Результат подсчета РКК'
+      type: object
+      properties:
+        amount:
+          description: 'Количество'
+          type: integer
+          format: int64
+      required:
+        - amount
+
+    SendType:
+      description: 'Вид отправки/получения документа'
+      type: object
+      required:
+        - code
+        - name
+      properties:
+        code:
+          description: 'Код отправки/получения'
+          type: string
+          maxLength: 10
+        name:
+          description: 'Наименование отправки/получения'
+          type: string
+          maxLength: 50
+
+    CardAction:
+      description: 'Действие над РКК: ADD_ALL_ACTIVE_EMPLOYEES_AS_REVIEWERS - добавить всех действующих сотрудников как лиц ознакомления'
+      type: string
+      enum: ['ADD_ALL_ACTIVE_EMPLOYEES_AS_REVIEWERS']
+
+    CardActionCommand:
+      description: 'Действие'
+      type: object
+      properties:
+        action:
+          $ref: '#/components/schemas/CardAction'
+      required:
+        - action
+
+    ResolutionTemplate:
+      description: 'Шаблон резолюции'
+      type: object
+      required:
+        - resText
+      properties:
+        id:
+          description: 'ИД шаблона резолюции'
+          type: integer
+          format: 'int64'
+          readOnly: true
+        resText:
+          description: 'Текст шаблона резолюции'
+          type: string
+
+    InOutOrganization:
+      description: 'Организация'
+      type: object
+      required:
+        - name
+        - shortName
+      properties:
+        id:
+          description: 'ИД организации'
+          type: integer
+          format: 'int64'
+          readOnly: true
+        unp:
+          description: 'УНП'
+          type: string
+          maxLength: 12
+        name:
+          description: 'Наименование полное'
+          type: string
+          maxLength: 250
+        shortName:
+          description: 'Наименование краткое'
+          type: string
+          maxLength: 70
+        address:
+          description: 'Адрес'
+          type: string
+          maxLength: 250
+        email:
+          description: 'Электронная почта'
+          type: string
+          maxLength: 100
+        fax:
+          description: 'Факс'
+          type: string
+          maxLength: 20
+        phone:
+          description: 'Телефон'
+          type: string
+          maxLength: 20
+        smdoCode:
+          description: 'Уникальный код организации в СМДО'
+          type: string
+          readOnly: true
+        smdoActive:
+          description: 'Признак активности в СМДО'
+          type: boolean
+          readOnly: true
+        actualDate:
+          description: 'Последняя дата синхронизации'
+          type: string
+          format: date-time
+          readOnly: true
+
+    PageOrg:
+      description: "Страница организаций"
+      type: object
+      properties:
+        pageNumber:
+          description: "Номер страницы"
+          type: integer
+          format: int32
+        pageElements:
+          description: "Количество элементов на текущей странице"
+          type: integer
+          format: int32
+        pageTotal:
+          description: "Общее количество страниц"
+          type: integer
+          format: int32
+        totalElements:
+          description: "Общее количество элементов на всех страницах"
+          type: integer
+          format: int64
+        elements:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/InOutOrganization'
+
+    LinkCards:
+      description: 'Массив РКК для привязки/отвязки в виде Map, где ключ - ИД РКК, а значение: 1 - привязать, 0 - отвязать'
+      type: object
+      additionalProperties:
+        type: integer
+        format: int8
+
+    CardLink:
+      type: object
+      properties:
+        cardId:
+          description: 'ИД РКК'
+          type: integer
+          format: int64
+          example: 123
+        documentTypeId:
+          description: 'ИД типа документа'
+          type: integer
+          format: int32
+          example: 1
+        title:
+          description: 'Заголовок документа'
+          type: string
+          example: "Название документа"
+        number:
+          description: 'Рег. номер документа'
+          type: string
+          example: "12345"
+        date:
+          description: 'Рег. дата документа'
+          type: string
+          format: date
+          example: "2025-10-30"
+        fileId:
+          description: 'ИД файла документа'
+          type: integer
+          format: int64
+          example: 456
+        fileName:
+          description: 'Название файла документа'
+          type: string
+          example: "Приказ.pdf"
